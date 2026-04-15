@@ -7,8 +7,8 @@ Tracker aktivitas pemain, chat, remote event, dan sounds.
 loadstring(game:HttpGet("https://raw.githubusercontent.com/haikalmamonto987-ship-it/Script-Roblox/main/tracker.lua"))()
 ```
 
-## 🎯 Tebak Yuk! Smart Helper v1.0
-Script khusus untuk map **Tebak Yuk!**. Fitur: Auto-Ask, Smart Guesser, dan Quick Answer.
+## 🎯 Tebak Yuk! Smart Helper v1.1
+Script khusus untuk map **Tebak Yuk!**. Fitur: Auto-Ask, Smart Guesser, dan Quick Answer (Clean Version).
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/haikalmamonto987-ship-it/Script-Roblox/main/tebakyuk.lua"))()
 ```
