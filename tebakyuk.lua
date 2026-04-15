@@ -24,6 +24,46 @@ local MAX_LOGS          = 50
 local FRAME_W, FRAME_H  = 360, 420
 
 -- ============================================================
+-- LOGGING SYSTEM (Defined early for usage)
+-- ============================================================
+local logOrder2 = 0
+local function addLog(text, color) -- Changed to local
+    if not _G.LogScroll then return end
+    logOrder2 = logOrder2 + 1
+
+    local msg = Instance.new("TextLabel")
+    msg.Size = UDim2.new(1, 0, 0, 0)
+    msg.AutomaticSize = Enum.AutomaticSize.Y
+    msg.BackgroundTransparency = 1
+    msg.Text = os.date("%H:%M:%S") .. " " .. text
+    msg.TextColor3 = color or Color3.fromRGB(180, 180, 200)
+    msg.Font = Enum.Font.Code
+    msg.TextSize = 9
+    msg.TextWrapped = true
+    msg.TextXAlignment = Enum.TextXAlignment.Left
+    msg.LayoutOrder = logOrder2
+    msg.Parent = _G.LogScroll
+
+    -- Limit logs
+    local children = _G.LogScroll:GetChildren()
+    local count = 0
+    for _, c in ipairs(children) do
+        if c:IsA("TextLabel") then count = count + 1 end
+    end
+    if count > MAX_LOGS then
+        for _, c in ipairs(children) do
+            if c:IsA("TextLabel") then c:Destroy(); break end
+        end
+    end
+
+    task.defer(function()
+        if _G.LogScroll then
+            _G.LogScroll.CanvasPosition = Vector2.new(0, math.huge)
+        end
+    end)
+end
+
+-- ============================================================
 -- SETUP GUI
 -- ============================================================
 local guiName = "TebakYukHelper_v1"
@@ -51,15 +91,21 @@ local remoteAsk = nil
 local remoteSend = nil
 
 local function findRemotes()
-    -- Cari berdasarkan nama di seluruh game
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            local name = obj.Name:lower()
-            if name == "askquestion" or name == "ask_question" or name == "ask" then
-                remoteAsk = obj
-            elseif name == "sendanswer" or name == "send_answer" or name == "answer" then
-                remoteSend = obj
+    -- Optimasi: Cari di ReplicatedStorage dulu (standar Roblox), baru Workspace
+    local targets = {RS, Workspace}
+    
+    for _, service in ipairs(targets) do
+        for _, obj in ipairs(service:GetDescendants()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                local name = obj.Name:lower()
+                -- Pencarian lebih spesifik agar tidak salah remote
+                if name == "askquestion" or name == "ask" then
+                    remoteAsk = obj
+                elseif name == "sendanswer" or name == "answer" then
+                    remoteSend = obj
+                end
             end
+            if remoteAsk and remoteSend then break end
         end
         if remoteAsk and remoteSend then break end
     end
@@ -538,7 +584,7 @@ local _, autoBtns = makeButtonRow({
         task.spawn(function()
             local questions = questionTree.kategori
             -- Fase 1: Tanya kategori
-            while autoRunning and autoQuestionIndex <= #questions do
+            while autoRunning and ScreenGui.Parent and autoQuestionIndex <= #questions do
                 local q = questions[autoQuestionIndex]
                 fireAsk(q)
                 addLog("📤 [ASK] " .. q, Color3.fromRGB(180, 140, 255))
@@ -546,17 +592,17 @@ local _, autoBtns = makeButtonRow({
                 task.wait(ASK_DELAY)
             end
 
-            if not autoRunning then return end
+            if not autoRunning or not ScreenGui.Parent then return end
 
-            -- Fase 2: Sub-kategori (default ke makanan jika tidak ada input)
+            -- Fase 2: Sub-kategori
             local subKeys = {"hewan", "benda", "makanan", "tempat", "orang", "tumbuhan"}
             for _, key in ipairs(subKeys) do
-                if not autoRunning then break end
+                if not autoRunning or not ScreenGui.Parent then break end
                 local subQ = questionTree[key]
                 if subQ then
                     setAutoStatus("🤖 Sub: " .. key)
                     for _, q in ipairs(subQ) do
-                        if not autoRunning then break end
+                        if not autoRunning or not ScreenGui.Parent then break end
                         fireAsk(q)
                         addLog("📤 [ASK] " .. q, Color3.fromRGB(180, 140, 255))
                         task.wait(ASK_DELAY)
@@ -564,17 +610,17 @@ local _, autoBtns = makeButtonRow({
                 end
             end
 
-            if not autoRunning then return end
+            if not autoRunning or not ScreenGui.Parent then return end
 
             -- Fase 3: Tebakan
             local tebakanKeys = {"tebakan_hewan", "tebakan_makanan", "tebakan_benda", "tebakan_tempat", "tebakan_orang"}
             for _, key in ipairs(tebakanKeys) do
-                if not autoRunning then break end
+                if not autoRunning or not ScreenGui.Parent then break end
                 local guesses = questionTree[key]
                 if guesses then
                     setAutoStatus("🎯 Menebak: " .. key)
                     for _, g in ipairs(guesses) do
-                        if not autoRunning then break end
+                        if not autoRunning or not ScreenGui.Parent then break end
                         fireAsk(g)
                         addLog("🎯 [GUESS] " .. g, Color3.fromRGB(255, 200, 100))
                         task.wait(ASK_DELAY)
@@ -583,7 +629,9 @@ local _, autoBtns = makeButtonRow({
             end
 
             autoRunning = false
-            setAutoStatus("✅ Selesai")
+            if ScreenGui.Parent then
+                setAutoStatus("✅ Selesai")
+            end
         end)
     end},
     { text = "⏹ Stop", width = 65, color = Color3.fromRGB(160, 40, 40), textColor = Color3.fromRGB(255, 200, 200), callback = function()
@@ -907,40 +955,9 @@ LogPad.PaddingRight = UDim.new(0, 4)
 LogPad.PaddingTop = UDim.new(0, 3)
 LogPad.Parent = LogScroll
 
-local logOrder2 = 0
+_G.LogScroll = LogScroll -- Temp storage for addLog
 
-function addLog(text, color)
-    logOrder2 = logOrder2 + 1
-
-    local msg = Instance.new("TextLabel")
-    msg.Size = UDim2.new(1, 0, 0, 0)
-    msg.AutomaticSize = Enum.AutomaticSize.Y
-    msg.BackgroundTransparency = 1
-    msg.Text = os.date("%H:%M:%S") .. " " .. text
-    msg.TextColor3 = color or Color3.fromRGB(180, 180, 200)
-    msg.Font = Enum.Font.Code
-    msg.TextSize = 9
-    msg.TextWrapped = true
-    msg.TextXAlignment = Enum.TextXAlignment.Left
-    msg.LayoutOrder = logOrder2
-    msg.Parent = LogScroll
-
-    -- Limit logs
-    local children = LogScroll:GetChildren()
-    local count = 0
-    for _, c in ipairs(children) do
-        if c:IsA("TextLabel") then count = count + 1 end
-    end
-    if count > MAX_LOGS then
-        for _, c in ipairs(children) do
-            if c:IsA("TextLabel") then c:Destroy(); break end
-        end
-    end
-
-    task.defer(function()
-        LogScroll.CanvasPosition = Vector2.new(0, math.huge)
-    end)
-end
+-- Deleted redundant addLog definition
 
 -- ============================================================
 -- MINIMIZE & CLOSE
@@ -963,6 +980,7 @@ end)
 CloseBtn.MouseButton1Click:Connect(function()
     autoRunning = false
     autoAnswering = false
+    _G.LogScroll = nil
     ScreenGui:Destroy()
 end)
 
